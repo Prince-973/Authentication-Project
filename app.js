@@ -4,7 +4,8 @@ const ejs = require("ejs");
 const bodyParser = require("body-parser");
 const path = require("path");
 const mongoose = require("mongoose");
-const md5 = require("md5");
+const bcrypt = require("bcrypt");
+const saltRounds = 10;
 
 const app = express();
 app.use(express.static("public"));
@@ -33,29 +34,36 @@ app.get("/register", (req, res) => {
 });
 
 app.post("/register", (req, res) => {
-  const newUser = new User({
-    email: req.body.username,
-    password: md5(req.body.password),
-  });
+  bcrypt.genSalt(saltRounds, function (err, salt) {
+    bcrypt.hash(req.body.password, salt, function (err, hash) {
+      const newUser = new User({
+        email: req.body.username,
+        password: hash,
+      });
 
-  newUser
-    .save()
-    .then(() => res.render("secrets"))
-    .catch((error) => console.error("Error:", error));
+      newUser
+        .save()
+        .then(() => res.render("secrets"))
+        .catch((error) => console.error("Error:", error));
+    });
+  });
 });
 
 app.post("/login", (req, res) => {
   const userName = req.body.username;
-  const password1 = md5(req.body.password);
+  const password1 = req.body.password;
 
   User.findOne({ email: userName })
     .then((doc) => {
       if (doc) {
-        // Note: Since the password is encrypted, you can't directly compare it with the plain text password
-        // You need to decrypt the stored password and then compare it
-        if (doc.password === password1) {
-          res.render("secrets");
-        }
+        bcrypt.compare(password1, doc.password, function (err, result) {
+          // result == true
+          if (result === true) {
+            res.render("secrets");
+          } else {
+            console.log(err);
+          }
+        });
       }
     })
     .catch((err) => {
